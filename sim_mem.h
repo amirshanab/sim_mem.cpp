@@ -26,6 +26,8 @@ class sim_mem {
     int page_size;
     int num_of_proc;
     queue<int> que;
+    int swapSize;
+    int *swapFileArr;
     page_descriptor **page_table; //pointer to page table
 public:
     sim_mem(char exe_file_name1[],char exe_file_name2[], char swap_file_name[], int text_size,
