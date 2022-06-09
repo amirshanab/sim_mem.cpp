@@ -317,9 +317,10 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
         int q_pop = que.front();
 
         que.pop();
-//        cout << q_pop << endl;
-        int j;
-        for (j = 0; j < num_of_pages; j++) {
+        int j=0;
+
+
+        for (; j < num_of_pages; j++) {
             if (page_table[ind][j].V == 1 && page_table[ind][j].frame == q_pop) {// found the page we want to remove from the memory.
                 page_table[ind][j].V = 0;
                 page_table[ind][j].frame = -1;
@@ -336,7 +337,7 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
             }
             int swapindex = swapFileArr[a]*page_size;
             page_table[ind][j].swap_index = swapindex;
-            for (int a = 0; a < page_size; a++) {
+            for ( a = 0; a < page_size; a++) {
                 toSwap[a] = main_memory[a + (q_pop * page_size)];
                 main_memory[a + (q_pop * page_size)] = '0';
             }
@@ -347,6 +348,15 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
             }
         }
 
+        for(j = 0; j < num_of_proc; j++) {
+            for (int a = 0; a < num_of_pages; a++) {
+                if (page_table[j][a].frame == q_pop) {
+                    page_table[j][a].frame = -1;
+                    page_table[j][a].V = 0;
+                    break;
+                }
+            }
+        }
         for (int a = 0; a < page_size; a++) {
             main_memory[a + (q_pop * page_size)] = temp[a];
         }
