@@ -1,6 +1,6 @@
 #ifndef SIM_MEM_H
 #define SIM_MEM_H
-#define MEMORY_SIZE 20
+#define MEMORY_SIZE 200
 #include <queue>
 using namespace std;
 extern char main_memory[MEMORY_SIZE];

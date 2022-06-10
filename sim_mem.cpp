@@ -71,37 +71,37 @@ sim_mem::sim_mem(char *exe_file_name1, char exe_file_name2[], char *swap_file_na
         swapFileArr[i] = -1;
     }
 
-    if ((this->program_fd[0] = open(exe_file_name1, O_RDONLY)) == -1) {
+    if ((this->program_fd[0] = open(exe_file_name1, O_RDONLY)) == -1) {//open first file (logical memory 1)
         perror("could not open file");
         //destructor
         this->sim_mem::~sim_mem();
         exit(EXIT_FAILURE);
     }
-    if (num_of_proc == 2 && (this->program_fd[1] = open(exe_file_name2, O_RDONLY)) == -1) {
+    if (num_of_proc == 2 && (this->program_fd[1] = open(exe_file_name2, O_RDONLY)) == -1) {// open second file (logical memory 2)
         perror("could not open file");
         this->sim_mem::~sim_mem();
         exit(EXIT_FAILURE);
     }
 
 
-    if ((this->swapfile_fd = open(swap_file_name, O_CREAT | O_RDWR | O_TRUNC, 0666)) == -1) {
+    if ((this->swapfile_fd = open(swap_file_name, O_CREAT | O_RDWR | O_TRUNC, 0666)) == -1) {// open the swap file
         cout << "error opening the swap file" << endl;
         this->sim_mem::~sim_mem();
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < MEMORY_SIZE; i++) {
+    for (int i = 0; i < MEMORY_SIZE; i++) {// initialize the main memory
         main_memory[i] = '0';
     }
     for (int i = 0; i < swapSize; i++) {
-        if (write(this->swapfile_fd, "0", 1) == -1) {
+        if (write(this->swapfile_fd, "0", 1) == -1) {// initialize the swap memory
             perror("Write Failed");
             this->sim_mem::~sim_mem();
             exit(EXIT_FAILURE);
         }
     }
     for (int j = 0; j < num_of_process; j++)
-        for (int i = 0; i < num_of_pages; i++) {
+        for (int i = 0; i < num_of_pages; i++) {// initialize the page table
             page_table[j][i].V = 0;
             page_table[j][i].D = 0;
             page_table[j][i].frame = -1;
@@ -116,9 +116,9 @@ sim_mem::sim_mem(char *exe_file_name1, char exe_file_name2[], char *swap_file_na
 }
 
 /***************************************************************************************/
-sim_mem::~sim_mem() {
+sim_mem::~sim_mem() {// destructor
 
-    if (close(swapfile_fd) == -1 || close(program_fd[0]) == -1) {
+    if (close(swapfile_fd) == -1 || close(program_fd[0]) == -1) {// close the open files
         perror("close Filed");
         exit(EXIT_FAILURE);
     }
@@ -128,11 +128,11 @@ sim_mem::~sim_mem() {
             exit(EXIT_FAILURE);
         }
     }
-    for(int i=0;i<num_of_proc;i++){
-            delete[] page_table[i];
+    for (int i = 0; i < num_of_proc; i++) {// delete the data inside the page table
+        delete[] page_table[i];
     }
-    delete[] page_table;
-    delete[] swapFileArr;
+    delete[] page_table;// delete the page table
+    delete[] swapFileArr;// delete the swap file index array.
 }
 
 /***************************************************************************************/
@@ -152,56 +152,56 @@ char sim_mem::load(int process_id, int address) {
         return '\0';
     }
 
-    if (page_table[index][page].V == 1) {
+    if (page_table[index][page].V == 1) {// if the page is valid (inside the main memory).
         pageF = page_table[index][page].frame;
         p_addrs = (pageF * page_size) + offset;
         return main_memory[p_addrs];
     } else {
         //bss heap stack and not text.
-        if (page_table[index][page].D == 0 && page_table[index][page].V == 0 && page >= (page_T + data)) {
+        if (page_table[index][page].D == 0 && page_table[index][page].V == 0 && page >= (page_T + data)) {// trying to load a page that is not text or data for the first time.
             fprintf(stderr, "load not possible\n");
             return '\0';
         }
         if (page_table[index][page].D == 0 && page <= (page_T)) {// bring from logical memory
             char temp[page_size];
-            lseek(program_fd[index], page_size * page, SEEK_SET);
+            lseek(program_fd[index], page_size * page, SEEK_SET);// fetch the page from the swap file.
             if (read(program_fd[index], temp, page_size) != page_size) {
                 perror("failed to read from file\n");
                 return '\0';
             }
-            write_toMainMem(temp, index, page);
+            write_toMainMem(temp, index, page);// write it to the main memory.
             pageF = page_table[index][page].frame;
             p_addrs = (pageF * page_size) + offset;
             return main_memory[p_addrs];
         }
 
-        if (page_table[index][page].P == 1 && page < (data + page_T)) {
+        if (page_table[index][page].P == 1 && page < (data + page_T)) {// page from text or data
             char temp[page_size];
-            lseek(program_fd[index], page_size * page, SEEK_SET);
+            lseek(program_fd[index], page_size * page, SEEK_SET);// fetch page from logical memory
             if (read(program_fd[index], temp, page_size) != page_size) {
                 perror("failed to read from file\n");
                 return '\0';
             }
-            write_toMainMem(temp, index, page);
+            write_toMainMem(temp, index, page);// write it to the main memory
             pageF = page_table[index][page].frame;
             p_addrs = (pageF * page_size) + offset;
             return main_memory[p_addrs];
         }
         if (page_table[index][page].V == 0 && page_table[index][page].D == 1 && page_table[index][page].swap_index != -1) {// bring from swap memory
             char swapTemp[page];
-            lseek(swapfile_fd, page_size * page_table[index][page].swap_index, SEEK_SET);
+            lseek(swapfile_fd, page_size * page_table[index][page].swap_index, SEEK_SET);// fetch page from swap file.
             if (read(swapfile_fd, swapTemp, page_size) != page_size) {
                 perror("failed to read from swap file\n");
                 return '\0';
             }
             for (int i = 1; i < swapSize; i++) {
-                if ((swapFileArr[i] * page_size) == page_table[index][page].swap_index) {
+                if ((swapFileArr[i] * page_size) == page_table[index][page].swap_index) {// remove page from swap file.
                     swapFileArr[i] = -1;
                     break;
                 }
             }
             page_table[index][page].swap_index = -1;
-            write_toMainMem(swapTemp, index, page);
+            write_toMainMem(swapTemp, index, page);//write page to main memory
             pageF = page_table[index][page].frame;
             p_addrs = (pageF * page_size) + offset;
             return main_memory[p_addrs];
@@ -294,19 +294,22 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
     int table_index = 0;
     int table_page = 0;
     int i;
-    for (i = 0; i < MEMORY_SIZE; i += page_size) {
+    for (i = 0; i < MEMORY_SIZE; i += page_size) {// looking for an empty place in the main memory.
         for (int j = i; j < i + page_size; j++) {
             if (main_memory[j] == '0') {
                 count++;
             }
         }
-        if (count == page_size)
+        if (count == page_size)// if we find a place in the main memory
             break;
         else
             count = 0;
     }
-    if (count == page_size) {
+    if (count == page_size) {// write page to the main memory.
         index = i / page_size;
+        /*
+         * new values for the page int the memory.
+         */
         page_table[ind][page].V = 1;
         page_table[ind][page].frame = index;
         que.push(index);
@@ -322,7 +325,7 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
         int j;
         int e;
         for (e = 0; e < num_of_proc; e++) {
-            for (j = 0; j < num_of_pages; j++) {
+            for (j = 0; j < num_of_pages; j++) {// looking for the page that we want to remove from the main memory (FIFO)
                 if (page_table[e][j].V == 1 && page_table[e][j].frame == q_pop) {
                     page_table[e][j].frame = -1;
                     page_table[e][j].V = 0;
@@ -332,32 +335,34 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
                 }
             }
         }
-        cout << "dirty :" << page_table[ind][table_page].D << endl;
-        if (page_table[table_index][table_page].D == 1) {
+        if (page_table[table_index][table_page].D == 1) {// if the page we are removing from the main memory is dirty we write it to the swap file.
             int a;
             for (a = 0; a < swapSize; a++) {
-                if (swapFileArr[a] == -1) {
+                if (swapFileArr[a] == -1) {// looking for an empty place int the swap memory.
                     swapFileArr[a] = a;
                     break;
                 }
             }
             int swapindex = swapFileArr[a] * page_size;
-            page_table[table_index][table_page].swap_index = swapindex;
+            page_table[table_index][table_page].swap_index = swapindex;// setting the swap index of the removed page to the new swap index
             for (a = 0; a < page_size; a++) {
                 toSwap[a] = main_memory[a + (q_pop * page_size)];
-                main_memory[a + (q_pop * page_size)] = '0';
+                main_memory[a + (q_pop * page_size)] = '0';// delete it from the main memory
             }
             lseek(swapfile_fd, swapindex, SEEK_SET);
-            if (write(swapfile_fd, toSwap, page_size) == -1) {
+            if (write(swapfile_fd, toSwap, page_size) == -1) {// write the page to the swap file.
                 perror("failed to write to swap file\n");
                 exit(EXIT_FAILURE);
             }
         }
 
 
-        for (int a = 0; a < page_size; a++) {
+        for (int a = 0; a < page_size; a++) { // write the new page to the main memory.
             main_memory[a + (q_pop * page_size)] = temp[a];
         }
+        /*
+         * new values for the page int the memory.
+         */
         page_table[ind][page].V = 1;
         page_table[ind][page].frame = q_pop;
         que.push(q_pop);
