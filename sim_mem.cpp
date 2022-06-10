@@ -57,12 +57,17 @@ sim_mem::sim_mem(char *exe_file_name1, char exe_file_name2[], char *swap_file_na
     this->page_size = page_size;
     this->num_of_proc = num_of_process;
     int page_T = text_size / page_size; // pages of the text
-    swapSize = (page_size * (num_of_pages - page_T))*num_of_proc; // the swap size
+    swapSize = (page_size * (num_of_pages - page_T)) * num_of_proc; // the swap size
     int page_swap = (swapSize / page_size); // pages of the swap
     swapFileArr = new int[swapSize];
     page_table = new page_descriptor *[num_of_proc];
 
-    for(int i = 0; i < swapSize; i ++){
+    page_table[0] = new page_descriptor[num_of_pages];
+    if (num_of_proc == 2) {
+        page_table[1] = new page_descriptor[num_of_pages];
+    }
+
+    for (int i = 0; i < swapSize; i++) {
         swapFileArr[i] = -1;
     }
 
@@ -77,10 +82,7 @@ sim_mem::sim_mem(char *exe_file_name1, char exe_file_name2[], char *swap_file_na
         this->sim_mem::~sim_mem();
         exit(EXIT_FAILURE);
     }
-    page_table[0] = new page_descriptor[num_of_pages];
-    if (num_of_proc == 2) {
-        page_table[1] = new page_descriptor[num_of_pages];
-    }
+
 
     if ((this->swapfile_fd = open(swap_file_name, O_CREAT | O_RDWR | O_TRUNC, 0666)) == -1) {
         cout << "error opening the swap file" << endl;
@@ -126,8 +128,8 @@ sim_mem::~sim_mem() {
             exit(EXIT_FAILURE);
         }
     }
-    for (int i = 0; i < num_of_proc; i++) {
-        delete[] page_table[i];
+    for(int i=0;i<num_of_proc;i++){
+            delete[] page_table[i];
     }
     delete[] page_table;
     delete[] swapFileArr;
@@ -192,8 +194,8 @@ char sim_mem::load(int process_id, int address) {
                 perror("failed to read from swap file\n");
                 return '\0';
             }
-            for(int i = 1; i < swapSize; i ++){
-                if((swapFileArr[i]*page_size) == page_table[index][page].swap_index){
+            for (int i = 1; i < swapSize; i++) {
+                if ((swapFileArr[i] * page_size) == page_table[index][page].swap_index) {
                     swapFileArr[i] = -1;
                     break;
                 }
@@ -219,22 +221,22 @@ void sim_mem::store(int process_id, int address, char value) {
     int pageF;
     int page_T = text_size / page_size;
     int data = data_size / page_size;
-    if (page > num_of_pages) {
+    if (page >= num_of_pages) {
         fprintf(stderr, "range error\n");
         return;
     }
+
     if (page_table[index][page].V == 1) {//in main memory
         pageF = page_table[index][page].frame;
         p_address = (pageF * page_size) + offset;
         main_memory[p_address] = value;
         page_table[index][page].D = 1;
         return;
-    }
-    else {
+    } else {
         if (page_table[index][page].P == 0) {// no permission to write
             fprintf(stderr, "no permission to write on this page\n");
             return;
-        } else if (page_table[index][page].D == 0 && page > page_T  && page < page_T + (bss_size/page_size)) {// bring page from executable folder
+        } else if (page_table[index][page].D == 0 && page > page_T && page < page_T + (bss_size / page_size)) {// bring page from executable folder
             char temp[page_size];
             lseek(program_fd[index], page_size * page, SEEK_SET);
             if (read(program_fd[index], temp, page_size) != page_size) {
@@ -248,16 +250,15 @@ void sim_mem::store(int process_id, int address, char value) {
             page_table[index][page].D = 1;
             page_table[index][page].V = 1;
             return;
-        }
-        else if (page_table[index][page].V == 0 && page_table[index][page].D == 1) {// bring from swap file
+        } else if (page_table[index][page].V == 0 && page_table[index][page].D == 1) {// bring from swap file
             char swapTemp[page];
             lseek(swapfile_fd, page_size * page_table[index][page].swap_index, SEEK_SET);
             if (read(swapfile_fd, swapTemp, page_size) != page_size) {
                 perror("failed to read from swap file\n");
                 return;
             }
-            for(int i = 1; i < swapSize; i ++){
-                if((swapFileArr[i]/page_size) == page_table[index][page].swap_index){
+            for (int i = 1; i < swapSize; i++) {
+                if ((swapFileArr[i] / page_size) == page_table[index][page].swap_index) {
                     swapFileArr[i] = -1;
                     break;
                 }
@@ -290,6 +291,8 @@ void sim_mem::store(int process_id, int address, char value) {
 void sim_mem::write_toMainMem(char *temp, int ind, int page) {
     int count = 0;
     int index = 0;
+    int table_index = 0;
+    int table_page = 0;
     int i;
     for (i = 0; i < MEMORY_SIZE; i += page_size) {
         for (int j = i; j < i + page_size; j++) {
@@ -300,7 +303,7 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
         if (count == page_size)
             break;
         else
-            count=0;
+            count = 0;
     }
     if (count == page_size) {
         index = i / page_size;
@@ -315,29 +318,32 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
 
         char toSwap[page_size];
         int q_pop = que.front();
-
         que.pop();
-        int j=0;
-
-
-        for (; j < num_of_pages; j++) {
-            if (page_table[ind][j].V == 1 && page_table[ind][j].frame == q_pop) {// found the page we want to remove from the memory.
-                page_table[ind][j].V = 0;
-                page_table[ind][j].frame = -1;
-                break;
+        int j;
+        int e;
+        for (e = 0; e < num_of_proc; e++) {
+            for (j = 0; j < num_of_pages; j++) {
+                if (page_table[e][j].V == 1 && page_table[e][j].frame == q_pop) {
+                    page_table[e][j].frame = -1;
+                    page_table[e][j].V = 0;
+                    table_index = e;
+                    table_page = j;
+                    break;
+                }
             }
         }
-        if (page_table[ind][j].D == 1) {
+        cout << "dirty :" << page_table[ind][table_page].D << endl;
+        if (page_table[table_index][table_page].D == 1) {
             int a;
-            for(a = 0; a < swapSize ; a ++){
-                if(swapFileArr[a] == -1){
+            for (a = 0; a < swapSize; a++) {
+                if (swapFileArr[a] == -1) {
                     swapFileArr[a] = a;
                     break;
                 }
             }
-            int swapindex = swapFileArr[a]*page_size;
-            page_table[ind][j].swap_index = swapindex;
-            for ( a = 0; a < page_size; a++) {
+            int swapindex = swapFileArr[a] * page_size;
+            page_table[table_index][table_page].swap_index = swapindex;
+            for (a = 0; a < page_size; a++) {
                 toSwap[a] = main_memory[a + (q_pop * page_size)];
                 main_memory[a + (q_pop * page_size)] = '0';
             }
@@ -348,15 +354,7 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
             }
         }
 
-        for(j = 0; j < num_of_proc; j++) {
-            for (int a = 0; a < num_of_pages; a++) {
-                if (page_table[j][a].frame == q_pop) {
-                    page_table[j][a].frame = -1;
-                    page_table[j][a].V = 0;
-                    break;
-                }
-            }
-        }
+
         for (int a = 0; a < page_size; a++) {
             main_memory[a + (q_pop * page_size)] = temp[a];
         }
@@ -365,4 +363,5 @@ void sim_mem::write_toMainMem(char *temp, int ind, int page) {
         que.push(q_pop);
 
     }
+
 }
