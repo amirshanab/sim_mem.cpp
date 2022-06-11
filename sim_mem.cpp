@@ -146,6 +146,7 @@ char sim_mem::load(int process_id, int address) {
     int pageF;
     int page_T = text_size / page_size;
     int data = data_size / page_size;
+    int bssPages = bss_size/page_size;
 
     if (page > num_of_pages) {
         fprintf(stderr, "range error\n");
@@ -158,9 +159,19 @@ char sim_mem::load(int process_id, int address) {
         return main_memory[p_addrs];
     } else {
         //bss heap stack and not text.
-        if (page_table[index][page].D == 0 && page_table[index][page].V == 0 && page >= (page_T + data)) {// trying to load a page that is not text or data for the first time.
+        if (page_table[index][page].D == 0  && page >= (page_T + data +bssPages)) {// trying to load a page that is not text or data for the first time.
             fprintf(stderr, "load not possible\n");
             return '\0';
+        }
+        if(page_table[index][page].D == 0 && page_table[index][page].P == 1 && page > (page_T+data) && page <= (bssPages + page_T + data)){
+            char zeros[page_size];
+            for(int i = 0; i < page_size ;i ++){
+                zeros[i] = '0';
+            }
+            write_toMainMem(zeros, index, page);
+            pageF = page_table[index][page].frame;
+            p_addrs = (pageF * page_size) + offset;
+            return main_memory[p_addrs];
         }
         if (page_table[index][page].D == 0 && page <= (page_T)) {// bring from logical memory
             char temp[page_size];
@@ -236,7 +247,7 @@ void sim_mem::store(int process_id, int address, char value) {
         if (page_table[index][page].P == 0) {// no permission to write
             fprintf(stderr, "no permission to write on this page\n");
             return;
-        } else if (page_table[index][page].D == 0 && page > page_T && page < page_T + (bss_size / page_size)) {// bring page from executable folder
+        } else if (page_table[index][page].D == 0 && page > page_T && page < page_T + (bss_size / page_size)) {// bring page from executable folder(data)
             char temp[page_size];
             lseek(program_fd[index], page_size * page, SEEK_SET);
             if (read(program_fd[index], temp, page_size) != page_size) {
