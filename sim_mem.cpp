@@ -36,7 +36,7 @@ void sim_mem::print_page_table() {
         printf("\n page table of process: %d \n", j);
         printf("Valid\t Dirty\t Permission \t Frame\t Swap index\n");
         for (i = 0; i < num_of_pages; i++) {
-            printf("[%d]\t  |  [%d]\t|\t[%d]\t    |\t[%d]\t|\t[%d]  |\n",
+            printf("[%d]\t[%d]\t[%d]\t[%d]\t[%d]\n",
                    page_table[j][i].V,
                    page_table[j][i].D,
                    page_table[j][i].P,
@@ -146,7 +146,7 @@ char sim_mem::load(int process_id, int address) {
     int pageF;
     int page_T = text_size / page_size;
     int data = data_size / page_size;
-    int bssPages = bss_size/page_size;
+    int bssPages = bss_size / page_size;
 
     if (page > num_of_pages) {
         fprintf(stderr, "range error\n");
@@ -159,13 +159,13 @@ char sim_mem::load(int process_id, int address) {
         return main_memory[p_addrs];
     } else {
         //bss heap stack and not text.
-        if (page_table[index][page].D == 0  && page >= (page_T + data +bssPages)) {// trying to load a page that is not text or data for the first time.
+        if (page_table[index][page].D == 0 && page >= (page_T + data + bssPages)) {// trying to load a page that is not text or data for the first time.
             fprintf(stderr, "load not possible\n");
             return '\0';
         }
-        if(page_table[index][page].D == 0 && page_table[index][page].P == 1 && page > (page_T+data) && page <= (bssPages + page_T + data)){
+        if (page_table[index][page].D == 0 && page_table[index][page].P == 1 && page >= (page_T + data) && page < (bssPages + page_T + data)) {
             char zeros[page_size];
-            for(int i = 0; i < page_size ;i ++){
+            for (int i = 0; i < page_size; i++) {
                 zeros[i] = '0';
             }
             write_toMainMem(zeros, index, page);
@@ -186,7 +186,7 @@ char sim_mem::load(int process_id, int address) {
             return main_memory[p_addrs];
         }
 
-        if (page_table[index][page].P == 1 && page < (data + page_T)) {// page from text or data
+        if (page_table[index][page].P == 1 && page >= page_T && page < (data + page_T) && page_table[index][page].D == 0) {// page from text or data
             char temp[page_size];
             lseek(program_fd[index], page_size * page, SEEK_SET);// fetch page from logical memory
             if (read(program_fd[index], temp, page_size) != page_size) {
@@ -200,9 +200,9 @@ char sim_mem::load(int process_id, int address) {
         }
         if (page_table[index][page].V == 0 && page_table[index][page].D == 1 && page_table[index][page].swap_index != -1) {// bring from swap memory
             char swapTemp[page];
-            lseek(swapfile_fd, page_size * page_table[index][page].swap_index, SEEK_SET);// fetch page from swap file.
+            lseek(swapfile_fd, page_table[index][page].swap_index, SEEK_SET);// fetch page from swap file.
             if (read(swapfile_fd, swapTemp, page_size) != page_size) {
-                perror("failed to read from swap file\n");
+                perror("failed to read from swap file11\n");
                 return '\0';
             }
             for (int i = 1; i < swapSize; i++) {
@@ -218,6 +218,7 @@ char sim_mem::load(int process_id, int address) {
             return main_memory[p_addrs];
         }
     }
+    return '\0';
 }
 
 /***************************************************************************************/
@@ -247,7 +248,7 @@ void sim_mem::store(int process_id, int address, char value) {
         if (page_table[index][page].P == 0) {// no permission to write
             fprintf(stderr, "no permission to write on this page\n");
             return;
-        } else if (page_table[index][page].D == 0 && page > page_T && page < page_T + (bss_size / page_size)) {// bring page from executable folder(data)
+        } else if (page_table[index][page].D == 0 && page >= page_T && page < page_T + (bss_size / page_size)) {// bring page from executable folder(data)
             char temp[page_size];
             lseek(program_fd[index], page_size * page, SEEK_SET);
             if (read(program_fd[index], temp, page_size) != page_size) {
@@ -263,7 +264,7 @@ void sim_mem::store(int process_id, int address, char value) {
             return;
         } else if (page_table[index][page].V == 0 && page_table[index][page].D == 1) {// bring from swap file
             char swapTemp[page];
-            lseek(swapfile_fd, page_size * page_table[index][page].swap_index, SEEK_SET);
+            lseek(swapfile_fd, page_table[index][page].swap_index, SEEK_SET);
             if (read(swapfile_fd, swapTemp, page_size) != page_size) {
                 perror("failed to read from swap file\n");
                 return;
